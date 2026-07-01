@@ -23,7 +23,6 @@ const responseSchema = new mongoose.Schema(
 
     answer: {
       type: String,
-      required: true,
       trim: true,
     },
   },
@@ -71,6 +70,11 @@ const recruitmentSchema = new mongoose.Schema(
         "Civil Engineering",
         "Chemical Engineering",
       ],
+    },
+    resumelink :{
+      type : String ,
+      required: true,
+      trim: true,
     },
 
     year: {
