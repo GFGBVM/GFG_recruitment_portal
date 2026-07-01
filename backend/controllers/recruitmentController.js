@@ -1,4 +1,4 @@
-const Recruitment = require("../models/recruitmentModel");
+const Recruitment = require("../models/RecruitmentModel");
 
 /*
 |--------------------------------------------------------------------------
