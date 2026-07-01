@@ -17,13 +17,26 @@ const app = express();
 |--------------------------------------------------------------------------
 */
 
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://gfgbvm-recruitment-26-27-8ssmo0ba7-gfgbvms-projects.vercel.app",
+];
+
 app.use(
   cors({
-    origin: "*",
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. Postman)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   })
 );
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
