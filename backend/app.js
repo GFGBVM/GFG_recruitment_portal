@@ -19,7 +19,7 @@ const app = express();
 
 const allowedOrigins = [
   "http://localhost:3000",
-  "https://gfgbvm-recruitment-26-27-8ssmo0ba7-gfgbvms-projects.vercel.app",
+  "https://gfgbvm-recruitment-26-27-eb3216ahl-gfgbvms-projects.vercel.app",
 ];
 
 app.use(
