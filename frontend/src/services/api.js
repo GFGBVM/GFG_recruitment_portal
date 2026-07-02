@@ -18,6 +18,10 @@ export const getDashboard = async () => {
   return response.data;
 };
 
+export const downloadCandidatesExcel = async () => {
+  const response = await API.get("/export-excel");
+  return response.data;
+};
 /*
 |--------------------------------------------------------------------------
 | Applicants

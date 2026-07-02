@@ -7,6 +7,7 @@ const {
   getApplicants,
   getApplicantById,
   deleteApplicant,
+  exportCandidatesExcel
 } = require("../controllers/recruitmentController");
 
 /*
@@ -17,6 +18,7 @@ const {
 |--------------------------------------------------------------------------
 */
 router.get("/dashboard", getDashboardAnalytics);
+router.get("/export-excel", exportCandidatesExcel);
 
 /*
 |--------------------------------------------------------------------------

@@ -5,65 +5,178 @@ const Recruitment = require("../models/RecruitmentModel");
 | Dashboard Analytics
 |--------------------------------------------------------------------------
 */
-
 const getDashboardAnalytics = async (req, res) => {
   try {
-    const applications = await Recruitment.find().lean();
+    // Optimization: Only fetch the fields needed for analytics, skipping large text blocks (responses, resumes)
+    const applications = await Recruitment.find(
+      {},
+      { cpi: 1, department: 1, year: 1, preferences: 1, createdAt: 1 }
+    ).lean();
 
+    const totalApps = applications.length;
+
+    // Initialize analytics structure
     const analytics = {
-      totalApplications: applications.length,
-
+      totalApplications: totalApps,
       averageCPI: 0,
+      
+      // Academic Quality Insights
+      cpiDistribution: {
+        "Below 7.0": 0,
+        "7.0 - 8.0": 0,
+        "8.0 - 9.0": 0,
+        "Above 9.0": 0,
+      },
 
+      // Demographics
       departmentWise: {},
-
       yearWise: {},
 
-      postWise: {
-        "Event & Operations Head": 0,
-        "Design & Creative Head": 0,
-        "Public Relations & Outreach Head": 0,
-        "Social Media & Promotion Head": 0,
+      // Deep Dive into Role Demand
+      postInsights: {
+        "Event & Operations Head": { firstChoice: 0, secondChoice: 0, thirdChoice: 0, total: 0 },
+        "Design & Creative Head": { firstChoice: 0, secondChoice: 0, thirdChoice: 0, total: 0 },
+        "Public Relations & Outreach Head": { firstChoice: 0, secondChoice: 0, thirdChoice: 0, total: 0 },
+        "Social Media & Promotion Head": { firstChoice: 0, secondChoice: 0, thirdChoice: 0, total: 0 },
       },
+
+      // Timeline / Activity Spikes
+      dailyTrends: {}, 
     };
+
+    if (totalApps === 0) {
+      return res.status(200).json({ success: true, data: analytics });
+    }
 
     let totalCPI = 0;
 
-    applications.forEach((application) => {
-      // Average CPI
-      totalCPI += application.cpi;
+    applications.forEach((app) => {
+      // 1. CPI Calculations & Distribution
+      totalCPI += app.cpi;
+      
+      if (app.cpi < 7.0) analytics.cpiDistribution["Below 7.0"]++;
+      else if (app.cpi < 8.0) analytics.cpiDistribution["7.0 - 8.0"]++;
+      else if (app.cpi < 9.0) analytics.cpiDistribution["8.0 - 9.0"]++;
+      else analytics.cpiDistribution["Above 9.0"]++;
 
-      // Department Count
-      analytics.departmentWise[application.department] =
-        (analytics.departmentWise[application.department] || 0) + 1;
+      // 2. Department & Year Counts
+      analytics.departmentWise[app.department] = (analytics.departmentWise[app.department] || 0) + 1;
+      analytics.yearWise[app.year] = (analytics.yearWise[app.year] || 0) + 1;
 
-      // Year Count
-      analytics.yearWise[application.year] =
-        (analytics.yearWise[application.year] || 0) + 1;
+      // 3. Advanced Preference Tracking (Priority Matters)
+      if (app.preferences && app.preferences.length === 3) {
+        app.preferences.forEach((post, index) => {
+          if (analytics.postInsights[post]) {
+            if (index === 0) analytics.postInsights[post].firstChoice++;
+            else if (index === 1) analytics.postInsights[post].secondChoice++;
+            else if (index === 2) analytics.postInsights[post].thirdChoice++;
+            
+            analytics.postInsights[post].total++;
+          }
+        });
+      }
 
-      // Preference Count
-      application.preferences.forEach((post) => {
-        analytics.postWise[post] =
-          (analytics.postWise[post] || 0) + 1;
-      });
+      // 4. Time-series Data (for line charts)
+      if (app.createdAt) {
+        // Formats to YYYY-MM-DD
+        const dateString = app.createdAt.toISOString().split("T")[0]; 
+        analytics.dailyTrends[dateString] = (analytics.dailyTrends[dateString] || 0) + 1;
+      }
     });
 
-    analytics.averageCPI =
-      applications.length > 0
-        ? Number((totalCPI / applications.length).toFixed(2))
-        : 0;
+    // Finalize Averages
+    analytics.averageCPI = Number((totalCPI / totalApps).toFixed(2));
 
     return res.status(200).json({
       success: true,
       data: analytics,
     });
+    
   } catch (error) {
     console.error("Dashboard Analytics Error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Internal Server Error",
     });
+  }
+};
+
+
+// controllers/recruitment.js
+const ExcelJS = require("exceljs");
+
+const exportCandidatesExcel = async (req, res) => {
+  try {
+    // Fetch all candidates, excluding the heavy 'responses' array
+    const candidates = await Recruitment.find(
+      {}, 
+      { responses: 0, __v: 0 } 
+    ).lean();
+
+    if (candidates.length === 0) {
+      return res.status(404).json({ success: false, message: "No candidates found." });
+    }
+
+    // Initialize a new workbook and worksheet
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Applicants");
+
+    // Define columns with headers, keys, and specific widths
+    worksheet.columns = [
+      { header: "S.No", key: "sno", width: 6 },
+      { header: "Full Name", key: "fullName", width: 22 },
+      { header: "Email", key: "email", width: 28 },
+      { header: "Phone Number", key: "phoneNumber", width: 15 },
+      { header: "ID Number", key: "idNumber", width: 12 },
+      { header: "Department", key: "department", width: 28 },
+      { header: "Current Year", key: "year", width: 12 },
+      { header: "CPI", key: "cpi", width: 8 },
+      { header: "Resume Link", key: "resume", width: 35 },
+      { header: "Preference 1", key: "pref1", width: 32 },
+      { header: "Preference 2", key: "pref2", width: 32 },
+      { header: "Preference 3", key: "pref3", width: 32 },
+      { header: "Applied On", key: "appliedOn", width: 15 },
+    ];
+
+    // Make the header row bold
+    worksheet.getRow(1).font = { bold: true };
+
+    // Add data rows
+    candidates.forEach((candidate, index) => {
+      worksheet.addRow({
+        sno: index + 1,
+        fullName: candidate.fullName,
+        email: candidate.email,
+        phoneNumber: candidate.phoneNumber,
+        idNumber: candidate.IdNumber,
+        department: candidate.department,
+        year: candidate.year,
+        cpi: candidate.cpi,
+        resume: candidate.resumelink,
+        pref1: candidate.preferences?.[0] || "N/A",
+        pref2: candidate.preferences?.[1] || "N/A",
+        pref3: candidate.preferences?.[2] || "N/A",
+        appliedOn: candidate.createdAt ? new Date(candidate.createdAt).toLocaleDateString() : "N/A",
+      });
+    });
+
+    // Set response headers to trigger file download
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="GFG_Core_Applicants.xlsx"'
+    );
+
+    // Write the workbook to a buffer and send it
+    const buffer = await workbook.xlsx.writeBuffer();
+    return res.status(200).send(buffer);
+
+  } catch (error) {
+    console.error("Excel Export Error:", error);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };
 
@@ -168,6 +281,7 @@ const deleteApplicant = async (req, res) => {
 
 module.exports = {
   getDashboardAnalytics,
+  exportCandidatesExcel,
   getApplicants,
   getApplicantById,
   deleteApplicant,

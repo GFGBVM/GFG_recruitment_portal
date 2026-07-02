@@ -32,10 +32,11 @@ export default function ApplicantDetails({ applicant }) {
           label="Department"
           value={applicant.department}
         />
-        {/* <DetailItem
+        
+        <DetailItem
           label="Resume"
           value={applicant.resumelink}
-        /> */}
+        />
         <DetailItem
           label="Year"
           value={applicant.year}
