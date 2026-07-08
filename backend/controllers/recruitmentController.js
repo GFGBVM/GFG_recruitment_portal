@@ -7,7 +7,7 @@ const Recruitment = require("../models/RecruitmentModel");
 */
 const getDashboardAnalytics = async (req, res) => {
   try {
-    // Optimization: Only fetch the fields needed for analytics, skipping large text blocks (responses, resumes)
+    // Optimization: Only fetch the fields needed for analytics
     const applications = await Recruitment.find(
       {},
       { cpi: 1, department: 1, year: 1, preferences: 1, createdAt: 1 }
@@ -19,7 +19,7 @@ const getDashboardAnalytics = async (req, res) => {
     const analytics = {
       totalApplications: totalApps,
       averageCPI: 0,
-      
+
       // Academic Quality Insights
       cpiDistribution: {
         "Below 7.0": 0,
@@ -32,20 +32,18 @@ const getDashboardAnalytics = async (req, res) => {
       departmentWise: {},
       yearWise: {},
 
-      // Deep Dive into Role Demand
-      postInsights: {
-        "Event & Operations Head": { firstChoice: 0, secondChoice: 0, thirdChoice: 0, total: 0 },
-        "Design & Creative Head": { firstChoice: 0, secondChoice: 0, thirdChoice: 0, total: 0 },
-        "Public Relations & Outreach Head": { firstChoice: 0, secondChoice: 0, thirdChoice: 0, total: 0 },
-        "Social Media & Promotion Head": { firstChoice: 0, secondChoice: 0, thirdChoice: 0, total: 0 },
-      },
+      // Dynamic Role Demand
+      postInsights: {},
 
       // Timeline / Activity Spikes
-      dailyTrends: {}, 
+      dailyTrends: {},
     };
 
     if (totalApps === 0) {
-      return res.status(200).json({ success: true, data: analytics });
+      return res.status(200).json({
+        success: true,
+        data: analytics,
+      });
     }
 
     let totalCPI = 0;
@@ -53,45 +51,55 @@ const getDashboardAnalytics = async (req, res) => {
     applications.forEach((app) => {
       // 1. CPI Calculations & Distribution
       totalCPI += app.cpi;
-      
+
       if (app.cpi < 7.0) analytics.cpiDistribution["Below 7.0"]++;
       else if (app.cpi < 8.0) analytics.cpiDistribution["7.0 - 8.0"]++;
       else if (app.cpi < 9.0) analytics.cpiDistribution["8.0 - 9.0"]++;
       else analytics.cpiDistribution["Above 9.0"]++;
 
       // 2. Department & Year Counts
-      analytics.departmentWise[app.department] = (analytics.departmentWise[app.department] || 0) + 1;
-      analytics.yearWise[app.year] = (analytics.yearWise[app.year] || 0) + 1;
+      analytics.departmentWise[app.department] =
+        (analytics.departmentWise[app.department] || 0) + 1;
 
-      // 3. Advanced Preference Tracking (Priority Matters)
-      if (app.preferences && app.preferences.length === 3) {
+      analytics.yearWise[app.year] =
+        (analytics.yearWise[app.year] || 0) + 1;
+
+      // 3. Dynamic Preference Tracking
+      if (app.preferences && app.preferences.length > 0) {
         app.preferences.forEach((post, index) => {
-          if (analytics.postInsights[post]) {
-            if (index === 0) analytics.postInsights[post].firstChoice++;
-            else if (index === 1) analytics.postInsights[post].secondChoice++;
-            else if (index === 2) analytics.postInsights[post].thirdChoice++;
-            
-            analytics.postInsights[post].total++;
+          // Create entry if it doesn't exist
+          if (!analytics.postInsights[post]) {
+            analytics.postInsights[post] = {
+              firstChoice: 0,
+              secondChoice: 0,
+              thirdChoice: 0,
+              total: 0,
+            };
           }
+
+          if (index === 0) analytics.postInsights[post].firstChoice++;
+          else if (index === 1) analytics.postInsights[post].secondChoice++;
+          else if (index === 2) analytics.postInsights[post].thirdChoice++;
+
+          analytics.postInsights[post].total++;
         });
       }
 
-      // 4. Time-series Data (for line charts)
+      // 4. Time-series Data
       if (app.createdAt) {
-        // Formats to YYYY-MM-DD
-        const dateString = app.createdAt.toISOString().split("T")[0]; 
-        analytics.dailyTrends[dateString] = (analytics.dailyTrends[dateString] || 0) + 1;
+        const dateString = app.createdAt.toISOString().split("T")[0];
+        analytics.dailyTrends[dateString] =
+          (analytics.dailyTrends[dateString] || 0) + 1;
       }
     });
 
-    // Finalize Averages
+    // Finalize Average CPI
     analytics.averageCPI = Number((totalCPI / totalApps).toFixed(2));
 
     return res.status(200).json({
       success: true,
       data: analytics,
     });
-    
   } catch (error) {
     console.error("Dashboard Analytics Error:", error);
     return res.status(500).json({

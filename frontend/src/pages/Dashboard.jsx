@@ -100,6 +100,8 @@ export default function Dashboard() {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count); 
 
+  console.log(postData)
+
   return (
     <div className="min-h-screen bg-gray-50 pb-12 font-sans">
       <Navbar />
